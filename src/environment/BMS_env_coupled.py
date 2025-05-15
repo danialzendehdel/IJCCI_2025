@@ -2,6 +2,8 @@ from typing import Any
 import gymnasium as gym 
 from gymnasium import spaces
 import numpy as np 
+import os
+import pandas as pd
 
 
 
@@ -51,6 +53,7 @@ class BMSEnv(gym.Env):
         self.data_handler = data_handler
         self.journalist = journalist
         self.info = self._getinfo()
+        self.info_csv = self._get_info_csv()
         self.episode_length = 0 
 
         self.aging_model_config = params_ins.aging_model
@@ -119,9 +122,26 @@ class BMSEnv(gym.Env):
             "total_cycle": [0],
             "accumulated_reward": [0],
             "accumulated_cost": [0],
-            "accumulated_battery_wear_cost": [0]
-
-        }
+            "accumulated_battery_wear_cost": [0] }
+    
+    def _get_info_csv(self):
+        return{
+            "P_l": [],
+            "P_g": [], 
+            "P_batt": [],
+            "SoC": [],
+            "current": [],
+            "SoH": [],
+            "Q_loss":[],
+            "E_sell": [],
+            "E_buy":[],
+            "Cost_with_batt": [],
+            "cost_without_batt": [],
+            "batt_wear_cost": [],
+            "reward": [],
+            "accumulated_reward": [],
+            "accumulated_cost": [],
+            "accumulated_battery_wear_cost": []       }
      
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
@@ -148,6 +168,15 @@ class BMSEnv(gym.Env):
         self.info = self._getinfo()
 
         self.journalist._process_smoothly("Environment RESET => new episode started")
+
+        # ===============================================
+        self.info_csv = self._get_info_csv()
+        self.info_csv["P_l"].append(self.p_l)
+        self.info_csv["P_g"].append(self.p_g)
+        self.info_csv["SoC"].append(self.soc)
+        self.info_csv["SoH"].append(self.SOH)
+        self.info_csv["Q_loss"].append(self.Q_loss)
+        # ===============================================
 
         return self._get_obs(), {}
     
@@ -202,6 +231,15 @@ class BMSEnv(gym.Env):
         self.info["accumulated_reward"].append(sum(self.info["reward"]))
         self.info["accumulated_cost"].append(sum(self.info["cost"]))
         self.info["accumulated_battery_wear_cost"].append(sum(self.info["battery_wear_cost"]))
+
+
+        # =================== CSV =========================
+        self.info_csv["batt_wear_cost"].append(battery_wear_cost)
+        self.info_csv["reward"].append(step_reward)
+        self.info_csv["accumulated_reward"].append(sum(self.info["reward"]))
+        self.info_csv["accumulated_cost"].append(sum(self.info["cost"]))
+        self.info_csv["accumulated_battery_wear_cost"].append(sum(self.info["battery_wear_cost"]))
+        # =================================================
         return step_reward
 
 
@@ -238,7 +276,11 @@ class BMSEnv(gym.Env):
 
         self._get_soc(current_pack, resistance_pack)
 
-        # TODO
+        # =================== CSV =========================
+        self.info_csv["P_batt"].append(action.item())
+        self.info_csv["current"].append(current_pack)
+
+        # =================================================
 
         if self.episode_length < len(self.data_handler):
             next_state = self.data_handler[self.episode_length]
@@ -248,6 +290,13 @@ class BMSEnv(gym.Env):
             self.day_of_week = next_state["day_of_week"]
             self.hour = next_state["hour"]
             dataset_complete = False
+            # =================== CSV ========================
+            self.info_csv["P_l"].append(self.p_l)
+            self.info_csv["P_g"].append(self.p_g)
+            self.info_csv["SoC"].append(self.soc) 
+            self.info_csv["SoH"].append(self.SOH)
+            self.info_csv["Q_loss"].append(self.Q_loss)
+            # =================================================
         
         else:
             dataset_complete = True
@@ -371,10 +420,8 @@ class BMSEnv(gym.Env):
         
         # Log if clipping occurred
         if new_soc != self.soc:
-            self.journalist._process_smoothly(
-                f"SOC clipped from {new_soc:.2f}% to {self.soc:.2f}%"
-            )
-            self.info["soc_violation"].append(True)
+            if self.versbose:
+                self.journalist._process_smoothly(f"SOC clipped from {new_soc:.2f}% to {self.soc:.2f}%")  
         else:
             self.info["soc_violation"].append(False)
 
@@ -416,7 +463,9 @@ class BMSEnv(gym.Env):
         self.journalist._process_smoothly(
         f"Icell={I_cell:.3f} A  C-rate={c_rate:.2f}  s={s_value:.1e}  "
         f"Ah_total={ah_total:.1f}  dAh={dAh_cell:.3f}  ΔSoH={delta_soh:.5f}"
-) if self.versbose else None
+            ) if self.versbose else None
+        
+
         return p_loss_step, delta_soh
 
     def _get_soc(self, current, resistance):
@@ -476,7 +525,7 @@ class BMSEnv(gym.Env):
         net_load = (self.p_l - self.p_g) * self.time_step   # (kWh)> 0 => load is higher than generation, < 0 => generation is higher than load
 
         if net_load > 0:   # load is higher than generation
-            cost_without_battery = net_load * price_buy
+            cost_without_battery = - net_load * price_buy
             if action > 0:  # battery is discharging
                 if E_batt_out >= net_load:
                     E_grid_import, E_grid_export = 0, E_batt_out - net_load
@@ -487,7 +536,7 @@ class BMSEnv(gym.Env):
                 E_grid_import, E_grid_export = net_load + E_batt_in, 0
         
         else:  # Surplus energy
-            cost_without_battery = net_load * price_sell
+            cost_without_battery = - net_load * price_sell
             if action < 0:  # battery is charging 
                 if E_batt_in >= abs(net_load):
                     E_grid_import, E_grid_export = E_batt_in - abs(net_load), 0
@@ -501,6 +550,15 @@ class BMSEnv(gym.Env):
 
         self.info["profit_cost"].append(cost)
         self.info["profit_cost_without_battery"].append(cost_without_battery)
+
+
+        # =================== CSV =========================
+        self.info_csv["E_sell"].append(E_grid_export)
+        self.info_csv["E_buy"].append(E_grid_import)
+        self.info_csv["Cost_with_batt"].append(cost)
+        self.info_csv["cost_without_batt"].append(cost_without_battery)
+        # =================================================
+        
 
         return cost, cost_without_battery
     
@@ -612,6 +670,80 @@ class BMSEnv(gym.Env):
             decimal = max(0, min(1, decimal))
             filled = int(decimal * width)
             return f"[{'█' * filled}{'-' * (width - filled)}] {percentage:.1f}%"
+
+    def save_to_csv(self, filepath=None, episode_id=None):
+        """
+        Save step information to a CSV file.
+        
+        Args:
+            filepath: Path to save the CSV file. If None, uses './results/csv/episode_{episode_id}.csv'
+            episode_id: Optional episode identifier for the filename. If None, uses episode_length.
+        """
+        # Create default path if not provided
+        if filepath is None:
+            # Create directories if they don't exist
+            os.makedirs("./results/csv", exist_ok=True)
+            # Use episode_id if provided, otherwise use episode_length
+            episode_num = episode_id if episode_id is not None else self.episode_length
+            filepath = f"./results/csv/episode_{episode_num}.csv"
+        
+        # Convert info dictionary to DataFrame
+        # Only include lists that have data (excluding single values)
+        data_dict = {k: v for k, v in self.info.items() if isinstance(v, list) and len(v) > 0}
+        
+        # Create DataFrame
+        df = pd.DataFrame(data_dict)
+        
+        # Add episode metadata
+        if len(df) > 0:
+            df['episode_id'] = episode_id if episode_id is not None else self.episode_length
+            
+            # Save to CSV
+            df.to_csv(filepath, index=False)
+            self.journalist._process_smoothly(f"Episode data saved to {filepath}")
+            
+        return filepath
+        
+    def append_to_csv(self, filepath="/home/danial/Documents/Codes_new/N-IJCCI-BMS/Code/results/csvs"):
+        """
+        Append the current step's data to a CSV file.
+        
+        Args:
+            filepath: Path to save the CSV file. If None, uses './results/csv/step_data.csv'
+        
+        Returns:
+            filepath of the CSV file
+        """
+        # Create default path if not provided
+        if filepath is None:
+            # Create directories if they don't exist
+            os.makedirs("./results/csv", exist_ok=True)
+            filepath = "./results/csv/step_data.csv"
+        
+        # Get the latest data for each metric
+        data = {}
+        for key, values in self.info_csv.items():
+            if isinstance(values, list) and len(values) > 0:
+                data[key] = [values[-1]]  # Get only the latest value
+            elif not isinstance(values, list):
+                data[key] = [values]  # Include non-list values
+        
+        # Add step and episode information
+        data['step'] = [self.episode_length]
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(data)
+        
+        # Check if file exists
+        file_exists = os.path.isfile(filepath)
+        
+        # Write to CSV (append mode if file exists)
+        df.to_csv(filepath, mode='a', header=not file_exists, index=False)
+        
+        # Comment out or remove this line to stop printing messages
+        # self.journalist._process_smoothly(f"Step {self.episode_length} data appended to {filepath}")
+        
+        return filepath
 
 
 

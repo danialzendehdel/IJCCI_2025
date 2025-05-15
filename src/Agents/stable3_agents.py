@@ -22,12 +22,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 class TensorboardCallback(BaseCallback):
-    def __init__(self, verbose=0):
+    def __init__(self, verbose=0, csv_path=None, log_freq=1):
         super().__init__(verbose)
         # Episode tracking
         self.current_episode = 0
         self.current_episode_reward = 0
         self.current_episode_steps = 0
+        self.csv_path = csv_path or "Code/results/csvs"
+        self.log_freq = log_freq  # How often to save CSV data (every n steps)
         
         # History tracking for all info metrics
         self.history = {
@@ -85,6 +87,17 @@ class TensorboardCallback(BaseCallback):
         info = self.locals['infos'][0]
         reward = self.locals['rewards'][0]
         done = self.locals['dones'][0]
+        
+        # Get the actual environment from the VecEnv
+        env = self.training_env.envs[0].env
+        
+        # Save to CSV every log_freq steps
+        if self.num_timesteps % self.log_freq == 0:
+            try:
+                # Append to CSV file
+                env.append_to_csv(filepath=f"{self.csv_path}/training_data.csv")
+            except Exception as e:
+                print(f"Error saving CSV: {e}")
         
         # Initialize step values
         step_values = {key: None for key in self.history['steps'].keys()}
@@ -402,11 +415,113 @@ def setup_callbacks(env, save_freq=10000, eval_freq=10000):
     
     return CallbackList([checkpoint_callback, eval_callback, tensorboard_callback])
 
+def plot_results(csv_path):
+    """
+    Create plots from the CSV data
+    """
+    # Check if the file exists
+    if not os.path.exists(csv_path):
+        print(f"CSV file not found at {csv_path}")
+        return
+        
+    # Create plots directory
+    plots_dir = os.path.join(os.path.dirname(csv_path), "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    # Read the CSV file
+    df = pd.read_csv(csv_path)
+    
+    # 1. Energy plot (P_l, P_g, P_batt)
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['P_l'], label='Load Power (P_l)')
+    plt.plot(df['P_g'], label='Generation Power (P_g)')
+    plt.plot(df['P_batt'], label='Battery Power (P_batt)')
+    plt.xlabel('Steps')
+    plt.ylabel('Power (kW)')
+    plt.title('Power Distribution')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'energy_power.png'))
+    
+    # 2. Energy exchange (E_sell, E_buy)
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['E_sell'], label='Energy Sold')
+    plt.plot(df['E_buy'], label='Energy Bought')
+    plt.xlabel('Steps')
+    plt.ylabel('Energy (kWh)')
+    plt.title('Energy Exchange with Grid')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'energy_exchange.png'))
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['Cost_with_batt'], label='Cost with Battery')
+    plt.plot(df['cost_without_batt'], label='Cost without Battery')
+    plt.xlabel('Steps')
+    plt.ylabel('Cost (€)')
+    plt.title('Economic Performance')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'economic_with_battery.png'))
+    
+    # 3. Economic data
+    plt.figure(figsize=(12, 6))
+    # plt.plot(df['Cost_with_batt'], label='Cost with Battery')
+    # plt.plot(df['cost_without_batt'], label='Cost without Battery')
+    plt.plot(df['batt_wear_cost'], label='Battery Wear Cost')
+    plt.plot(df['reward'], label='Reward')
+    # plt.plot(df['accumulated_cost'], label='Accumulated Cost')
+    plt.xlabel('Steps')
+    plt.ylabel('Cost (€)')
+    plt.title('Economic Performance')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'economic.png'))
+
+    # 3.1. Economic data
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['accumulated_cost'], label='Accumulated Cost')
+    plt.plot(df['accumulated_battery_wear_cost'], label='Accumulated Battery Wear Cost')
+    plt.plot(df['accumulated_reward'], label='Accumulated Reward')
+    plt.xlabel('Steps')
+    plt.ylabel('Cost (€)')
+    plt.title('Accumulated Cost and Battery Wear Cost')
+    plt.legend()
+    
+    # 4. SOC (State of Charge)
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['SoC'], label='State of Charge')
+    plt.xlabel('Steps')
+    plt.ylabel('SOC (%)')
+    plt.title('Battery State of Charge')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'soc.png'))
+    
+    # 5. Current
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['current'], label='Battery Current')
+    plt.xlabel('Steps')
+    plt.ylabel('Current (A)')
+    plt.title('Battery Current')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plots_dir, 'current.png'))
+    
+    print(f"Plots saved to {plots_dir}")
+
 def train_and_evaluate(algo, total_timesteps, device="cpu"):
     try:
         # Create directories
         os.makedirs("Code/results/final_models", exist_ok=True)
         os.makedirs("Code/results/tensorboard_logs", exist_ok=True)
+        os.makedirs("Code/results/csvs", exist_ok=True)
         
         # Get current time for unique naming
         current_time = datetime.datetime.now()
@@ -416,8 +531,11 @@ def train_and_evaluate(algo, total_timesteps, device="cpu"):
         journalist = Journal("Code/results/Training", "training" + formatted_time)
         env = setup_environment('src/configuration/config.yml', journalist)
         
-        # Create callback
-        tensorboard_callback = TensorboardCallback()
+        # Create callback with CSV path
+        tensorboard_callback = TensorboardCallback(
+            csv_path="Code/results/csvs",
+            log_freq=1  # Log every step
+        )
         checkpoint_callback = CheckpointCallback(
             save_freq=1000,
             save_path=f"Code/results/checkpoints/{algo}_{formatted_time}/",
@@ -477,6 +595,12 @@ def train_and_evaluate(algo, total_timesteps, device="cpu"):
             f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}"
         )
         
+        # Generate plots from the CSV data
+        csv_file = f"Code/results/csvs/training_data.csv"
+        if os.path.exists(csv_file):
+            plot_results(csv_file)
+            journalist._process_smoothly(f"Plots generated from CSV data")
+        
         # Evaluate the model
         try:
             eval_env = setup_environment('/home/danial/Documents/Codes_new/N-IJCCI-BMS/src/configuration/config.yml', journalist)
@@ -520,9 +644,12 @@ if __name__ == "__main__":
     device = "cpu"
     
     algorithms = ['PPO']
+    
+    # Run for only 1000 steps
     data_length = 34700
-    num_passes = 1
+    num_passes = 10
     total_steps = data_length * num_passes
+    # total_steps = 1000
     
     for algo in algorithms:
         print(f"\nTraining with {algo}")
