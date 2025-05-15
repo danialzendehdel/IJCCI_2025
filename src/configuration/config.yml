@@ -1,0 +1,121 @@
+Batteries:
+
+  Custom_made: 
+    nominal_capacity: 1.69  # Ah per cell (5.2 kWh ÷ 96 V ÷ 32)
+    nominal_current: 3.25  # A per cell (104 A pack ÷ 32)
+    nominal_Ah: 1.69  # Ah per cell
+    C_rate_max: 10.0  # pack
+    C_rate_min: -10.0 # pack 
+    Np: 32
+    Ns: 26
+    Nm: 2
+    replacement_cost: 10000 # Euro
+    expected_cycles: 5000 # cycles
+
+    
+  Tesla:
+      model: "Powerwall 2"
+      type: "Li-ion"
+      nominal_capacity_kWh: 13.5   # nominal capacity in kWh
+      usable_capacity_kWh: 13.5    # usable capacity in kWh
+      nominal_voltage_V: 48
+      max_charge_rate_kW: 7        
+      max_discharge_rate_kW: 7
+      efficiency: 0.95              # Increased from 0.9 for better energy conversion
+      degradation_rate_per_step: 0.0001  # example metric for degradation
+      "life_80_cyc": 5000
+
+
+Simulations:
+  battery_model: Custom_made
+  soc_init: 60 # 60%
+  soc_min: 20
+  soc_max: 80
+  epsilon: 0.00001
+  time_interval: 0.25 # min 15 min = 0.25 h 
+  GA: false
+  price: multiple
+  soh_min: 0.8
+  soh_max: 1.0
+
+
+Environment:
+  max_steps_per_episode: 96
+  reward_coeff:
+    coeff_q_loss: 1
+    coeff_p_loss: 1
+
+  economic:
+    constant_price: 0.5 # Euro 
+    multiple_price_buy: 
+      min: 0.18
+      mid: 0.26
+      max: 0.38
+    multiple_price_sell: 
+      min: 0.06
+      mid: 0.08
+      max: 0.1
+  
+    
+
+    
+
+
+aging_model:
+  # Equation (4) in "A Control-Oriented Cycle-Life Model for HEV Lithium-Ion Batteries"
+  
+  q_loss_eol: 80 # percent 
+  constant_temperature: 25
+  # Activation Energy [J/mol]
+  Ea_J_per_mol: 31500
+
+  # Universal Gas Constant [J/(mol*K)]
+  Rg_J_per_molK: 8.314
+
+  # Fit coefficient multiplying Ic
+  h: 152.5
+
+  # Power-law exponent, used in Q_loss = sfunct(...) * (Ah)^z
+  exponent_z: 0.57
+
+  # Two sets of (a, b) for below-45% SOC and at/above-45% SOC
+  case_l_45:
+    soc_range: "< 45%"
+    a: 2896.6
+    b: 7411.2
+
+  case_b_45:
+    soc_range: ">= 45%"
+    a: 2694.5
+    b: 6022.2
+
+  # case_l_45:
+  #   soc_range: "< 45%"
+  #   a: 1.4e-3  # Increased from e-6 to e-3
+  #   b: 3.2e-3
+  # case_b_45:
+  #   soc_range: ">= 45%"
+  #   a: 1.2e-3
+  #   b: 2.8e-3
+
+
+
+
+  # The NASADataReader class processes the NASA Prognostics Data Repository battery dataset, which contains data for Li-ion cells
+  #   - Discharge Data: Voltage, current, capacity, and temperature measurements during discharge cycles.
+  #   - Charge Data: Voltage, current, capacity, and temperature measurements during charge cycles.
+  #   - Cycle Data: Discharge and charge cycles with varying current profiles.
+  #   - Temperature Data: Temperature measurements during discharge and charge cycles.
+  #   - Current Data: Current measurements during discharge and charge cycles.
+  #   - Voltage Data: Voltage measurements during discharge and charge cycles.
+  #   - Summary Data: Metrics like initial capacity, final capacity, and capacity loss.
+
+Data:
+  matlab_data: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/datasets/NMC/NMC_cell_data.mat"
+  matlab_data_test: "/home/danial/Documents/Codes/BMS-SOC/Code/data/cycle.mat"
+  P_net: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/datasets/data/processed_data_661.csv"
+  Nasa_data: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/Nasa_batteries"
+  NASA_cells: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/Nasa_batteries/lookup_tables"
+
+
+
