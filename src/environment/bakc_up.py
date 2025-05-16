@@ -228,7 +228,7 @@ class BMSEnv(gym.Env):
 
 
 
-        step_reward = cost - delta_soh
+        step_reward = cost - battery_wear_cost
         
         
         # step_reward = -(
@@ -326,16 +326,6 @@ class BMSEnv(gym.Env):
         #     self.SOH <= self.params.environment.economic.soh_replacement_threshold or dataset_complete):
         if (self.SOH <= self.params.environment.economic.soh_replacement_threshold or dataset_complete):
             if wasted: self.journalist._process_smoothly(f"⚠️⚠️⚠️⚠️BATTERY IS DEAD⚠️⚠️⚠️⚠️")
-            self.journalist._process_smoothly(f"Episode {self.episode_number} , Episode length: {self.episode_length}")
-            self.journalist._process_smoothly(f"SOH: {self.SOH}")
-            self.journalist._process_smoothly(f"SOC: {self.soc}")
-            self.journalist._process_smoothly(f"Q_loss: {self.Q_loss_percent}")
-            self.journalist._process_smoothly(f"Throughput Charge: {self.charge_throughput}")
-            self.journalist._process_smoothly(f"Ah_total: {self.info['ah_total'][-1]}")
-            self.journalist._process_smoothly(f"Accumulated Reward: {self.info['accumulated_reward'][-1]}")
-            self.journalist._process_smoothly(f"Accumulated Cost: {self.info['accumulated_cost'][-1]}")
-            self.journalist._process_smoothly(f"Accumulated Battery Wear Cost: {self.info['accumulated_battery_wear_cost'][-1]}")
-        
             done = True
         else:
             done = False 

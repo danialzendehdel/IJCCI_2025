@@ -114,6 +114,7 @@ Data:
   matlab_data: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/datasets/NMC/NMC_cell_data.mat"
   matlab_data_test: "/home/danial/Documents/Codes/BMS-SOC/Code/data/cycle.mat"
   P_net: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/datasets/data/processed_data_661.csv"
+  P_net_10_years: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/datasets/data/dataset_661_replicated_x10.csv"
   Nasa_data: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/Nasa_batteries"
   NASA_cells: "/home/danial/Documents/Codes_new/N-IJCCI-BMS/Nasa_batteries/lookup_tables"
 

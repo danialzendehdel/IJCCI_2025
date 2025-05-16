@@ -459,13 +459,7 @@ def plot_results(csv_path):
     plt.figure(figsize=(12, 6))
     plt.plot(df['Cost_with_batt'], label='Cost with Battery')
     plt.plot(df['cost_without_batt'], label='Cost without Battery')
-    plt.xlabel('Steps')
-    plt.ylabel('Cost (€)')
-    plt.title('Economic Performance')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plots_dir, 'economic_with_battery.png'))
+    
     
     # 3. Economic data
     plt.figure(figsize=(12, 6))
@@ -645,11 +639,17 @@ if __name__ == "__main__":
     
     algorithms = ['PPO']
     
-    # Run for only 1000 steps
+    # Define training duration based on epochs.
+    # data_length represents the number of steps in one full pass through the dataset (i.e., one epoch).
     data_length = 34700
-    num_passes = 10
-    total_steps = data_length * num_passes
-    # total_steps = 1000
+    # num_epochs specifies how many times the agent should train over the full dataset.
+    # With num_epochs = 2, the model is trained for two epochs, meaning it will process
+    # the equivalent of the entire dataset twice.
+    num_epochs = 2
+    total_steps = data_length * num_epochs
+    
+    # Alternatively, for shorter test runs or a fixed number of steps different from epoch-based calculation:
+    # total_steps = 1000  # Uncomment this line to use a fixed number of steps.
     
     for algo in algorithms:
         print(f"\nTraining with {algo}")

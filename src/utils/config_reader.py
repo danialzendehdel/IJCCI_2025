@@ -84,6 +84,7 @@ class DataConfig:
     matlab_data: str 
     matlab_data_test: str 
     P_net: str 
+    P_net_10_years: str 
     Nasa_data: str 
     NASA_cells: str 
     
@@ -234,6 +235,7 @@ def load_config(config_path: str) -> FullConfig:
         matlab_data=data_config["matlab_data"],
         matlab_data_test=data_config["matlab_data_test"],
         P_net=data_config["P_net"],
+        P_net_10_years=data_config["P_net_10_years"],
         Nasa_data=data_config["Nasa_data"],
         NASA_cells=data_config["NASA_cells"]
     )

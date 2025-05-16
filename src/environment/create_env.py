@@ -16,7 +16,7 @@ def create_env(path, journalist_ins):
     # journalist = Journal("Code/results/Summary", "test")
     journalist = journalist_ins
     params = load_config(path)
-    data_handler = DataHandler(params.data.P_net)
+    data_handler = DataHandler(params.data.P_net_10_years)
     journalist._get_data_stats(data_handler.stats)
     journalist._plot_energy(data_handler.df)
 
